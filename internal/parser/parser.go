@@ -47,6 +47,10 @@ func (p *Parser) Parse(sourceURL string, fetchResult *types.FetchResult) (*types
 	if page.TextContent == "" {
 		page.Warnings = append(page.Warnings, "No readable text extracted from the page.")
 	}
+	if jsWarning := detectJSShell(doc, page); jsWarning != "" {
+		page.Warnings = append(page.Warnings, jsWarning)
+		page.Metadata["js_heavy_shell"] = "true"
+	}
 
 	return page, nil
 }
@@ -195,6 +199,70 @@ func normalizeInlineWhitespaceForBlocks(value string) string {
 		}
 	}
 	return strings.Join(cleaned, "\n\n")
+}
+
+func detectJSShell(root *html.Node, page *types.Page) string {
+	if page == nil {
+		return ""
+	}
+
+	textLength := len(strings.TrimSpace(page.TextContent))
+	readabilityLength := len(strings.TrimSpace(page.ReadabilityContent))
+	scriptCount := countElement(root, "script")
+	iframeCount := countElement(root, "iframe")
+	appShellScore := detectShellMarkers(root)
+
+	if textLength > 180 || readabilityLength > 180 {
+		return ""
+	}
+	if scriptCount+iframeCount < 2 && appShellScore == 0 {
+		return ""
+	}
+	return "This page may depend heavily on JavaScript. GhostMode can only show the limited HTML shell returned by the server."
+}
+
+func countElement(node *html.Node, tag string) int {
+	count := 0
+	var walk func(*html.Node)
+	walk = func(current *html.Node) {
+		if current == nil {
+			return
+		}
+		if current.Type == html.ElementNode && strings.EqualFold(current.Data, tag) {
+			count++
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(node)
+	return count
+}
+
+func detectShellMarkers(node *html.Node) int {
+	score := 0
+	var walk func(*html.Node)
+	walk = func(current *html.Node) {
+		if current == nil {
+			return
+		}
+		if current.Type == html.ElementNode {
+			for _, attr := range current.Attr {
+				if attr.Key != "id" && attr.Key != "class" {
+					continue
+				}
+				value := strings.ToLower(attr.Val)
+				if strings.Contains(value, "__next") || strings.Contains(value, "root") || strings.Contains(value, "app") || strings.Contains(value, "mount") {
+					score++
+				}
+			}
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(node)
+	return score
 }
 
 func findFirstElement(node *html.Node, tag string) *html.Node {

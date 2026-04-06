@@ -169,6 +169,31 @@ func TestParseFallsBackWhenNoStrongCandidateExists(t *testing.T) {
 	}
 }
 
+func TestParseWarnsForJavaScriptHeavyShell(t *testing.T) {
+	t.Parallel()
+
+	body := readFixture(t, "js_shell.html")
+	page, err := New().Parse("https://example.com/source", &types.FetchResult{
+		ContentType: "text/html",
+		Body:        []byte(body),
+		FinalURL:    "https://example.com/app",
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	if len(page.Warnings) < 2 {
+		t.Fatalf("expected warnings for empty content and JS shell, got %+v", page.Warnings)
+	}
+	joined := strings.Join(page.Warnings, " ")
+	if !strings.Contains(joined, "depend heavily on JavaScript") {
+		t.Fatalf("expected JS-heavy warning, got %+v", page.Warnings)
+	}
+	if page.Metadata["js_heavy_shell"] != "true" {
+		t.Fatalf("expected js_heavy_shell metadata, got %+v", page.Metadata)
+	}
+}
+
 func readFixture(t *testing.T, name string) string {
 	t.Helper()
 

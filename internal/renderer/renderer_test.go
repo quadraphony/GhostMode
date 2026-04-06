@@ -62,3 +62,17 @@ func TestRenderSuppressesEmptyLinkSections(t *testing.T) {
 		t.Fatalf("expected truncated URL in %q", out)
 	}
 }
+
+func TestRenderShowsWarningsForThinShells(t *testing.T) {
+	t.Parallel()
+
+	out := Render(&types.Page{
+		Title:    "Shell",
+		FinalURL: "https://example.com/app",
+		Warnings: []string{"This page may depend heavily on JavaScript. GhostMode can only show the limited HTML shell returned by the server."},
+	}, Options{})
+
+	if !strings.Contains(out, "Warnings") || !strings.Contains(out, "depend heavily on JavaScript") {
+		t.Fatalf("expected warning output, got %q", out)
+	}
+}
