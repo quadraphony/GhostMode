@@ -38,7 +38,7 @@ func (p *Parser) Parse(sourceURL string, fetchResult *types.FetchResult) (*types
 		Title:              extractTitle(fetchResult.Body, doc),
 		TextContent:        standardContent,
 		ReadabilityContent: readabilityResult.Text,
-		Links:              resolver.ExtractLinks(doc, fetchResult.FinalURL),
+		Links:              resolver.ExtractLinks(doc, fetchResult.FinalURL, readabilityResult.Node),
 		Metadata: map[string]string{
 			"content_type": fetchResult.ContentType,
 		},

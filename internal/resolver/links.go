@@ -2,20 +2,23 @@ package resolver
 
 import (
 	"net/url"
+	"sort"
 	"strings"
 
+	"ghost-browser/internal/cleaner"
 	"ghost-browser/pkg/types"
 	"golang.org/x/net/html"
 )
 
-func ExtractLinks(root *html.Node, baseURL string) []types.Link {
+func ExtractLinks(root *html.Node, baseURL string, mainContent *html.Node) []types.Link {
 	base, err := url.Parse(baseURL)
 	if err != nil {
 		return nil
 	}
 
-	var links []types.Link
-	seen := make(map[string]struct{})
+	var candidates []types.Link
+	seenByURL := make(map[string]types.Link)
+	seenByLabelURL := make(map[string]struct{})
 
 	var walk func(*html.Node)
 	walk = func(node *html.Node) {
@@ -23,21 +26,48 @@ func ExtractLinks(root *html.Node, baseURL string) []types.Link {
 			return
 		}
 		if node.Type == html.ElementNode && strings.EqualFold(node.Data, "a") {
-			if link, ok := buildLink(node, base, len(links)+1); ok {
-				key := link.URL + "\n" + link.Label
-				if _, exists := seen[key]; !exists {
-					seen[key] = struct{}{}
-					links = append(links, link)
+			if link, ok := buildLink(node, base, mainContent); ok {
+				labelKey := strings.ToLower(link.Label) + "\n" + link.URL
+				if _, exists := seenByLabelURL[labelKey]; exists {
+					goto Next
+				}
+				seenByLabelURL[labelKey] = struct{}{}
+
+				if existing, exists := seenByURL[link.URL]; exists {
+					if shouldReplaceLink(existing, link) {
+						seenByURL[link.URL] = link
+					}
+				} else {
+					seenByURL[link.URL] = link
 				}
 			}
 		}
+	Next:
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
 			walk(child)
 		}
 	}
 
 	walk(root)
-	return links
+	for _, link := range seenByURL {
+		candidates = append(candidates, link)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Category != candidates[j].Category {
+			return candidates[i].Category == types.LinkCategoryArticle
+		}
+		if candidates[i].Score != candidates[j].Score {
+			return candidates[i].Score > candidates[j].Score
+		}
+		if candidates[i].Label != candidates[j].Label {
+			return candidates[i].Label < candidates[j].Label
+		}
+		return candidates[i].URL < candidates[j].URL
+	})
+	for i := range candidates {
+		candidates[i].Index = i + 1
+	}
+	return candidates
 }
 
 func ResolveReference(baseURL, href string) (string, bool) {
@@ -63,7 +93,7 @@ func ResolveReference(baseURL, href string) (string, bool) {
 	return resolved.String(), true
 }
 
-func buildLink(node *html.Node, base *url.URL, index int) (types.Link, bool) {
+func buildLink(node *html.Node, base *url.URL, mainContent *html.Node) (types.Link, bool) {
 	href := ""
 	for _, attr := range node.Attr {
 		if strings.EqualFold(attr.Key, "href") {
@@ -88,15 +118,17 @@ func buildLink(node *html.Node, base *url.URL, index int) (types.Link, bool) {
 	}
 
 	label := normalizeLinkLabel(textContent(node))
-	if label == "" {
-		label = resolved.String()
+	if shouldDropLabel(label) {
+		return types.Link{}, false
 	}
 
+	score, category := classifyLink(node, label, resolved.String(), mainContent)
 	return types.Link{
-		Index:    index,
+		Index:    0,
 		Label:    label,
 		URL:      resolved.String(),
-		Category: classifyLink(node, label, resolved.String()),
+		Category: category,
+		Score:    score,
 	}, true
 }
 
@@ -137,17 +169,38 @@ func SplitLinks(links []types.Link) (articles []types.Link, utility []types.Link
 	return articles, utility
 }
 
-func classifyLink(node *html.Node, label, target string) types.LinkCategory {
+func classifyLink(node *html.Node, label, target string, mainContent *html.Node) (int, types.LinkCategory) {
 	text := strings.ToLower(strings.TrimSpace(label))
 	target = strings.ToLower(target)
+	score := 0
 
 	if looksLikeUtility(text, target) {
-		return types.LinkCategoryUtility
+		score -= 70
 	}
 	if looksLikeArticle(node, text, target) {
-		return types.LinkCategoryArticle
+		score += 90
 	}
-	return types.LinkCategoryUtility
+	if mainContent != nil && isDescendantOf(node, mainContent) {
+		score += 120
+	}
+	if insideJunkContainer(node) {
+		score -= 90
+	}
+	if wordCount(text) >= 5 {
+		score += 30
+	}
+	if len(text) >= 40 {
+		score += 20
+	}
+	if isLowValueLabel(text) {
+		score -= 80
+	}
+
+	category := types.LinkCategoryUtility
+	if score >= 40 {
+		category = types.LinkCategoryArticle
+	}
+	return score, category
 }
 
 func looksLikeArticle(node *html.Node, text, target string) bool {
@@ -182,6 +235,7 @@ func looksLikeUtility(text, target string) bool {
 		"about", "contact", "privacy", "terms", "faq", "weather", "search",
 		"markets", "companies", "books", "recipes", "motoring", "politics",
 		"good news", "local", "podcast", "video", "live", "more", "read more",
+		"share", "menu",
 	}
 	for _, term := range utilityTerms {
 		if text == term {
@@ -190,6 +244,58 @@ func looksLikeUtility(text, target string) bool {
 	}
 	if strings.Contains(target, "/about") || strings.Contains(target, "/privacy") || strings.Contains(target, "/terms") || strings.Contains(target, "/contact") || strings.Contains(target, "/login") || strings.Contains(target, "/subscribe") {
 		return true
+	}
+	return false
+}
+
+func shouldDropLabel(label string) bool {
+	label = normalizeLinkLabel(label)
+	if label == "" {
+		return true
+	}
+	if len([]rune(label)) <= 1 {
+		return true
+	}
+	return false
+}
+
+func shouldReplaceLink(existing, candidate types.Link) bool {
+	if candidate.Score != existing.Score {
+		return candidate.Score > existing.Score
+	}
+	return len(candidate.Label) > len(existing.Label)
+}
+
+func isDescendantOf(node, ancestor *html.Node) bool {
+	for current := node; current != nil; current = current.Parent {
+		if current == ancestor {
+			return true
+		}
+	}
+	return false
+}
+
+func insideJunkContainer(node *html.Node) bool {
+	for current := node.Parent; current != nil; current = current.Parent {
+		if cleaner.ShouldSuppressNode(current) {
+			return true
+		}
+		switch strings.ToLower(current.Data) {
+		case "nav", "footer", "header", "aside":
+			return true
+		}
+	}
+	return false
+}
+
+func isLowValueLabel(text string) bool {
+	terms := []string{
+		"home", "about", "login", "sign in", "privacy", "terms", "share", "subscribe", "menu",
+	}
+	for _, term := range terms {
+		if text == term {
+			return true
+		}
 	}
 	return false
 }

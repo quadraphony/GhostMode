@@ -20,6 +20,7 @@ type Link struct {
 	URL      string
 	Category LinkCategory
 	Snippet  string
+	Score    int
 }
 
 type LinkCategory string
