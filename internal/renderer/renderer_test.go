@@ -14,12 +14,15 @@ func TestRenderIncludesLinksAndContent(t *testing.T) {
 		Title:       "Example",
 		FinalURL:    "https://example.com",
 		TextContent: "This is readable text for the terminal browser.",
-		Links: []types.Link{
-			{Index: 1, Label: "One", URL: "https://example.com/one"},
+		ArticleLinks: []types.Link{
+			{Index: 1, Label: "One Article Headline", URL: "https://example.com/one", Category: types.LinkCategoryArticle},
+		},
+		UtilityLinks: []types.Link{
+			{Index: 2, Label: "Home", URL: "https://example.com/home", Category: types.LinkCategoryUtility},
 		},
 	}, Options{Width: 40, ShowHelpHint: true})
 
-	for _, want := range []string{"Title: Example", "This is readable text", "[1] One", "Commands: open <n>"} {
+	for _, want := range []string{"Title: Example", "This is readable text", "Articles", "[1] One Article Headline", "Navigation", "Commands: open <n>"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("render output missing %q: %q", want, out)
 		}

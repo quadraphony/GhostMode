@@ -13,6 +13,7 @@ type Options struct {
 	Width           int
 	ReadabilityMode bool
 	ShowHelpHint    bool
+	ShowAllLinks    bool
 }
 
 func Render(page *types.Page, opts Options) string {
@@ -63,20 +64,12 @@ func Render(page *types.Page, opts Options) string {
 		lines = append(lines, "")
 	}
 
-	lines = append(lines, "Links")
-	lines = append(lines, strings.Repeat("-", min(width, 5)))
-	if len(page.Links) == 0 {
-		lines = append(lines, "No links found.")
-	} else {
-		for _, link := range page.Links {
-			lines = append(lines, fmt.Sprintf("[%d] %s", link.Index, link.Label))
-			lines = append(lines, "    "+link.URL)
-		}
-	}
+	appendLinkSection(&lines, "Articles", page.ArticleLinks, width, opts.ShowAllLinks, 12)
+	appendLinkSection(&lines, "Navigation", page.UtilityLinks, width, opts.ShowAllLinks, 10)
 
 	if opts.ShowHelpHint {
 		lines = append(lines, "")
-		lines = append(lines, "Commands: open <n>, back, forward, reload, bookmark add, bookmark list, history, search <query>, readability, help, quit")
+		lines = append(lines, "Commands: open <n>, open article <n>, links, articles, back, forward, reload, bookmark add, bookmark list, history, search <query>, readability, help, quit")
 	}
 
 	return strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"
@@ -108,6 +101,41 @@ func wrapParagraph(text string, width int) []string {
 
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+func appendLinkSection(lines *[]string, title string, items []types.Link, width int, showAll bool, limit int) {
+	*lines = append(*lines, title)
+	*lines = append(*lines, strings.Repeat("-", min(width, len(title))))
+	if len(items) == 0 {
+		*lines = append(*lines, "None.")
+		return
+	}
+
+	display := items
+	if !showAll && len(display) > limit {
+		display = display[:limit]
+	}
+
+	for _, link := range display {
+		*lines = append(*lines, fmt.Sprintf("[%d] %s", link.Index, link.Label))
+		*lines = append(*lines, "    "+link.URL)
+		if strings.TrimSpace(link.Snippet) != "" {
+			for _, line := range wrapParagraph(link.Snippet, max(width-4, 30)) {
+				*lines = append(*lines, "    "+line)
+			}
+		}
+	}
+	if !showAll && len(items) > len(display) {
+		*lines = append(*lines, fmt.Sprintf("... %d more. Use `articles` or `links` to show all.", len(items)-len(display)))
+	}
+	*lines = append(*lines, "")
+}
+
+func max(a, b int) int {
+	if a > b {
 		return a
 	}
 	return b

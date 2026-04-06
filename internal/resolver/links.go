@@ -93,9 +93,10 @@ func buildLink(node *html.Node, base *url.URL, index int) (types.Link, bool) {
 	}
 
 	return types.Link{
-		Index: index,
-		Label: label,
-		URL:   resolved.String(),
+		Index:    index,
+		Label:    label,
+		URL:      resolved.String(),
+		Category: classifyLink(node, label, resolved.String()),
 	}, true
 }
 
@@ -122,4 +123,91 @@ func textContent(node *html.Node) string {
 
 func normalizeLinkLabel(value string) string {
 	return strings.Join(strings.Fields(value), " ")
+}
+
+func SplitLinks(links []types.Link) (articles []types.Link, utility []types.Link) {
+	for _, link := range links {
+		switch link.Category {
+		case types.LinkCategoryArticle:
+			articles = append(articles, link)
+		default:
+			utility = append(utility, link)
+		}
+	}
+	return articles, utility
+}
+
+func classifyLink(node *html.Node, label, target string) types.LinkCategory {
+	text := strings.ToLower(strings.TrimSpace(label))
+	target = strings.ToLower(target)
+
+	if looksLikeUtility(text, target) {
+		return types.LinkCategoryUtility
+	}
+	if looksLikeArticle(node, text, target) {
+		return types.LinkCategoryArticle
+	}
+	return types.LinkCategoryUtility
+}
+
+func looksLikeArticle(node *html.Node, text, target string) bool {
+	if strings.Count(target, "/") >= 4 && len(text) >= 24 {
+		return true
+	}
+	if strings.Contains(target, "/article") || strings.Contains(target, "/news/") || strings.Contains(target, "/sport/") || strings.Contains(target, "/business/") || strings.Contains(target, "/opinion/") || strings.Contains(target, "/world/") || strings.Contains(target, "/politics/") || strings.Contains(target, "/life/") {
+		return true
+	}
+	if strings.Contains(text, "|") || strings.Contains(text, ":") {
+		return true
+	}
+	if wordCount(text) >= 5 {
+		return true
+	}
+	if ancestorHasSemantic(node, "article", "main") {
+		return true
+	}
+	return false
+}
+
+func looksLikeUtility(text, target string) bool {
+	if text == "" {
+		return true
+	}
+	if len(text) <= 3 {
+		return true
+	}
+	utilityTerms := []string{
+		"home", "news", "sport", "business", "world", "opinion", "life", "travel",
+		"food", "wine", "jobs", "subscribe", "sign in", "login", "register",
+		"about", "contact", "privacy", "terms", "faq", "weather", "search",
+		"markets", "companies", "books", "recipes", "motoring", "politics",
+		"good news", "local", "podcast", "video", "live", "more", "read more",
+	}
+	for _, term := range utilityTerms {
+		if text == term {
+			return true
+		}
+	}
+	if strings.Contains(target, "/about") || strings.Contains(target, "/privacy") || strings.Contains(target, "/terms") || strings.Contains(target, "/contact") || strings.Contains(target, "/login") || strings.Contains(target, "/subscribe") {
+		return true
+	}
+	return false
+}
+
+func wordCount(value string) int {
+	return len(strings.Fields(value))
+}
+
+func ancestorHasSemantic(node *html.Node, names ...string) bool {
+	for current := node.Parent; current != nil; current = current.Parent {
+		if current.Type != html.ElementNode {
+			continue
+		}
+		for _, name := range names {
+			if strings.EqualFold(current.Data, name) {
+				return true
+			}
+		}
+	}
+	return false
 }

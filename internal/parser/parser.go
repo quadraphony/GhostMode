@@ -40,6 +40,7 @@ func (p *Parser) Parse(sourceURL string, fetchResult *types.FetchResult) (*types
 			"content_type": fetchResult.ContentType,
 		},
 	}
+	page.ArticleLinks, page.UtilityLinks = resolver.SplitLinks(page.Links)
 	if page.TextContent == "" {
 		page.Warnings = append(page.Warnings, "No readable text extracted from the page.")
 	}

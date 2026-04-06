@@ -33,6 +33,7 @@ type Browser struct {
 	history        *history.Store
 	searchProvider SearchProvider
 	readability    bool
+	showAllLinks   bool
 }
 
 func New(fetch *fetcher.Fetcher, parse *parser.Parser, bookmarkStore *bookmarks.Store, historyStore *history.Store, search SearchProvider, historyEntries []types.HistoryEntry) *Browser {
@@ -101,6 +102,7 @@ func (b *Browser) RenderCurrent() string {
 		Width:           b.rendererWidth,
 		ReadabilityMode: b.readability,
 		ShowHelpHint:    true,
+		ShowAllLinks:    b.showAllLinks,
 	})
 }
 
@@ -123,6 +125,19 @@ func (b *Browser) OpenLink(ctx context.Context, index int) (*types.Page, error) 
 		}
 	}
 	return nil, fmt.Errorf("link %d not found", index)
+}
+
+func (b *Browser) OpenArticle(ctx context.Context, index int) (*types.Page, error) {
+	current := b.nav.Current()
+	if current == nil {
+		return nil, navigator.ErrNoCurrentPage
+	}
+	for _, link := range current.ArticleLinks {
+		if link.Index == index {
+			return b.LoadURL(ctx, link.URL)
+		}
+	}
+	return nil, fmt.Errorf("article %d not found", index)
 }
 
 func (b *Browser) AddBookmark() (string, error) {
@@ -261,6 +276,12 @@ func (b *Browser) Execute(ctx context.Context, command string, out io.Writer) (s
 		return "", false, nil
 	case "open":
 		return b.execOpen(ctx, arg, out)
+	case "articles":
+		b.showAllLinks = true
+		return renderArticleList(b.nav.Current()), false, nil
+	case "links":
+		b.showAllLinks = true
+		return renderLinkList(b.nav.Current()), false, nil
 	case "bookmark":
 		return b.execBookmark(ctx, arg, out)
 	case "history":
@@ -293,7 +314,20 @@ func (b *Browser) Execute(ctx context.Context, command string, out io.Writer) (s
 func (b *Browser) execOpen(ctx context.Context, arg string, out io.Writer) (string, bool, error) {
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
-		return "", false, errors.New("open requires a link number, bookmark reference, or URL")
+		return "", false, errors.New("open requires a link number, article reference, bookmark reference, or URL")
+	}
+	if strings.HasPrefix(arg, "article ") {
+		index, err := parsePositiveInt(strings.TrimSpace(strings.TrimPrefix(arg, "article ")))
+		if err != nil {
+			return "", false, err
+		}
+		_, err = b.OpenArticle(ctx, index)
+		if err != nil {
+			return "", false, err
+		}
+		b.showAllLinks = false
+		fmt.Fprint(out, b.RenderCurrent())
+		return "", false, nil
 	}
 	if strings.HasPrefix(arg, "bookmark ") {
 		index, err := parsePositiveInt(strings.TrimSpace(strings.TrimPrefix(arg, "bookmark ")))
@@ -304,6 +338,7 @@ func (b *Browser) execOpen(ctx context.Context, arg string, out io.Writer) (stri
 		if err != nil {
 			return "", false, err
 		}
+		b.showAllLinks = false
 		fmt.Fprint(out, b.RenderCurrent())
 		return "", false, nil
 	}
@@ -312,6 +347,7 @@ func (b *Browser) execOpen(ctx context.Context, arg string, out io.Writer) (stri
 		if err != nil {
 			return "", false, err
 		}
+		b.showAllLinks = false
 		fmt.Fprint(out, b.RenderCurrent())
 		return "", false, nil
 	}
@@ -319,6 +355,7 @@ func (b *Browser) execOpen(ctx context.Context, arg string, out io.Writer) (stri
 	if err != nil {
 		return "", false, err
 	}
+	b.showAllLinks = false
 	fmt.Fprint(out, b.RenderCurrent())
 	return "", false, nil
 }
@@ -340,7 +377,7 @@ func (b *Browser) execBookmark(ctx context.Context, arg string, out io.Writer) (
 }
 
 func helpText() string {
-	return "Commands: open <number|url>, open bookmark <n>, back, forward, reload, bookmark add, bookmark list, history, search <query>, readability, help, quit"
+	return "Commands: open <number|url>, open article <n>, open bookmark <n>, articles, links, back, forward, reload, bookmark add, bookmark list, history, search <query>, readability, help, quit"
 }
 
 func renderBookmarks(items []types.Bookmark) string {
@@ -404,4 +441,28 @@ func formatError(err error) string {
 	default:
 		return err.Error()
 	}
+}
+
+func renderArticleList(page *types.Page) string {
+	if page == nil || len(page.ArticleLinks) == 0 {
+		return "No article links found."
+	}
+	var lines []string
+	for _, link := range page.ArticleLinks {
+		lines = append(lines, fmt.Sprintf("[%d] %s", link.Index, link.Label))
+		lines = append(lines, "    "+link.URL)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderLinkList(page *types.Page) string {
+	if page == nil || len(page.Links) == 0 {
+		return "No links found."
+	}
+	var lines []string
+	for _, link := range page.Links {
+		lines = append(lines, fmt.Sprintf("[%d] %s (%s)", link.Index, link.Label, link.Category))
+		lines = append(lines, "    "+link.URL)
+	}
+	return strings.Join(lines, "\n")
 }

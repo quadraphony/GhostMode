@@ -32,7 +32,13 @@ func TestExecuteParsesCommands(t *testing.T) {
 		Title:       "Start",
 		FinalURL:    "https://example.com",
 		TextContent: "Hello",
-		Links:       []types.Link{{Index: 1, Label: "Next", URL: "https://example.com/next"}},
+		Links: []types.Link{
+			{Index: 1, Label: "Next", URL: "https://example.com/next", Category: types.LinkCategoryUtility},
+			{Index: 2, Label: "Long article headline for users", URL: "https://example.com/news/story", Category: types.LinkCategoryArticle},
+		},
+		ArticleLinks: []types.Link{
+			{Index: 2, Label: "Long article headline for users", URL: "https://example.com/news/story", Category: types.LinkCategoryArticle},
+		},
 	}, types.HistoryEntry{Title: "Start", URL: "https://example.com", VisitedAt: time.Now()})
 
 	msg, quit, err := b.Execute(context.Background(), "bookmark add", &bytes.Buffer{})
@@ -53,5 +59,10 @@ func TestExecuteParsesCommands(t *testing.T) {
 	msg, quit, err = b.Execute(context.Background(), "readability", &bytes.Buffer{})
 	if err != nil || quit || msg == "" {
 		t.Fatalf("readability => msg=%q quit=%v err=%v", msg, quit, err)
+	}
+
+	msg, quit, err = b.Execute(context.Background(), "articles", &bytes.Buffer{})
+	if err != nil || quit || msg == "" {
+		t.Fatalf("articles => msg=%q quit=%v err=%v", msg, quit, err)
 	}
 }

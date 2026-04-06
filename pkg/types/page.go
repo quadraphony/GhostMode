@@ -8,13 +8,23 @@ type Page struct {
 	TextContent        string
 	ReadabilityContent string
 	Links              []Link
+	ArticleLinks       []Link
+	UtilityLinks       []Link
 	Metadata           map[string]string
 	Warnings           []string
 }
 
-// Link describes a navigable page link. Link extraction is added in a later phase.
 type Link struct {
-	Index int
-	Label string
-	URL   string
+	Index    int
+	Label    string
+	URL      string
+	Category LinkCategory
+	Snippet  string
 }
+
+type LinkCategory string
+
+const (
+	LinkCategoryArticle LinkCategory = "article"
+	LinkCategoryUtility LinkCategory = "utility"
+)

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"ghost-browser/pkg/types"
 	"golang.org/x/net/html"
 )
 
@@ -65,5 +66,18 @@ func TestExtractLinks(t *testing.T) {
 	}
 	if links[2].URL != "https://example.com/base/page#frag" {
 		t.Fatalf("unexpected fragment link: %+v", links[2])
+	}
+}
+
+func TestSplitLinks(t *testing.T) {
+	t.Parallel()
+
+	articles, utility := SplitLinks([]types.Link{
+		{Index: 1, Category: types.LinkCategoryArticle},
+		{Index: 2, Category: types.LinkCategoryUtility},
+		{Index: 3, Category: types.LinkCategoryArticle},
+	})
+	if len(articles) != 2 || len(utility) != 1 {
+		t.Fatalf("unexpected split: articles=%d utility=%d", len(articles), len(utility))
 	}
 }

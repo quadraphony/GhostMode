@@ -72,9 +72,11 @@ func parseSearchResults(body []byte) []types.SearchResult {
 				href := attrValue(node, "href")
 				title := strings.TrimSpace(linkText(node))
 				if href != "" && title != "" {
+					snippet := resultSnippet(node)
 					results = append(results, types.SearchResult{
-						Title: title,
-						URL:   href,
+						Title:   title,
+						URL:     href,
+						Snippet: snippet,
 					})
 				}
 			}
@@ -85,6 +87,21 @@ func parseSearchResults(body []byte) []types.SearchResult {
 	}
 	walk(doc)
 	return results
+}
+
+func resultSnippet(node *html.Node) string {
+	for current := node.Parent; current != nil; current = current.Parent {
+		text := strings.Join(strings.Fields(linkText(current)), " ")
+		title := strings.Join(strings.Fields(linkText(node)), " ")
+		if text == "" || text == title {
+			continue
+		}
+		text = strings.TrimSpace(strings.TrimPrefix(text, title))
+		if text != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 func attrValue(node *html.Node, key string) string {
