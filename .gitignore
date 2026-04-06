@@ -1,3 +1,4 @@
 ghost
+*.md
 .codex/*
 !.codex/config.toml

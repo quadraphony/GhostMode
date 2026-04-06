@@ -9,4 +9,5 @@ var (
 	ErrEmptyURL           = stderrors.New("URL is required")
 	ErrTooManyRedirects   = stderrors.New("too many redirects")
 	ErrEmptyResponseBody  = stderrors.New("empty response body")
+	ErrInvalidHTML        = stderrors.New("invalid HTML")
 )

@@ -11,6 +11,7 @@ import (
 
 	apperrors "ghost-browser/internal/errors"
 	"ghost-browser/internal/fetcher"
+	"ghost-browser/internal/parser"
 	"ghost-browser/internal/resolver"
 )
 
@@ -32,12 +33,27 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	page, err := parser.New().Parse(normalizedURL, result)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %s\n", formatError(err))
+		return 1
+	}
+
 	fmt.Fprintln(stdout, "Ghost Mode Browser")
-	fmt.Fprintf(stdout, "Source URL: %s\n", normalizedURL)
-	fmt.Fprintf(stdout, "Final URL: %s\n", result.FinalURL)
+	if page.Title != "" {
+		fmt.Fprintf(stdout, "Title: %s\n", page.Title)
+	}
+	fmt.Fprintf(stdout, "Source URL: %s\n", page.SourceURL)
+	fmt.Fprintf(stdout, "Final URL: %s\n", page.FinalURL)
 	fmt.Fprintf(stdout, "Status: %d\n", result.StatusCode)
-	fmt.Fprintf(stdout, "Content-Type: %s\n", result.ContentType)
-	fmt.Fprintf(stdout, "Bytes: %d\n", len(result.Body))
+	fmt.Fprintf(stdout, "Content-Type: %s\n\n", result.ContentType)
+	if page.TextContent != "" {
+		fmt.Fprintln(stdout, page.TextContent)
+		fmt.Fprintln(stdout)
+	}
+	for _, warning := range page.Warnings {
+		fmt.Fprintf(stdout, "Warning: %s\n", warning)
+	}
 
 	return 0
 }
@@ -56,6 +72,8 @@ func formatError(err error) string {
 		return "request failed after too many redirects"
 	case stderrors.Is(err, apperrors.ErrEmptyResponseBody):
 		return "received an empty HTML response body"
+	case stderrors.Is(err, apperrors.ErrInvalidHTML):
+		return err.Error()
 	}
 
 	var dnsErr *net.DNSError
