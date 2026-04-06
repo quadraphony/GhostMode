@@ -30,9 +30,10 @@ func Render(page *types.Page, opts Options) string {
 	lines = append(lines, "Ghost Mode Browser")
 	lines = append(lines, strings.Repeat("=", min(width, 19)))
 	if page.Title != "" {
-		lines = append(lines, "Title: "+page.Title)
+		lines = append(lines, page.Title)
+		lines = append(lines, strings.Repeat("-", min(width, len(page.Title))))
 	}
-	lines = append(lines, "URL: "+page.FinalURL)
+	lines = append(lines, "URL: "+truncateURL(page.FinalURL, width))
 	if opts.ReadabilityMode {
 		lines = append(lines, "Mode: readability")
 	} else {
@@ -45,7 +46,7 @@ func Render(page *types.Page, opts Options) string {
 		content = page.ReadabilityContent
 	}
 	if strings.TrimSpace(content) == "" {
-		lines = append(lines, "No readable text extracted.")
+		lines = append(lines, "No readable content extracted.")
 	} else {
 		for _, paragraph := range strings.Split(content, "\n\n") {
 			paragraph = strings.TrimSpace(paragraph)
@@ -58,6 +59,8 @@ func Render(page *types.Page, opts Options) string {
 	}
 
 	if len(page.Warnings) > 0 {
+		lines = append(lines, "Warnings")
+		lines = append(lines, "--------")
 		for _, warning := range page.Warnings {
 			lines = append(lines, "Warning: "+warning)
 		}
@@ -107,12 +110,11 @@ func min(a, b int) int {
 }
 
 func appendLinkSection(lines *[]string, title string, items []types.Link, width int, showAll bool, limit int) {
-	*lines = append(*lines, title)
-	*lines = append(*lines, strings.Repeat("-", min(width, len(title))))
 	if len(items) == 0 {
-		*lines = append(*lines, "None.")
 		return
 	}
+	*lines = append(*lines, title)
+	*lines = append(*lines, strings.Repeat("-", min(width, len(title))))
 
 	display := items
 	if !showAll && len(display) > limit {
@@ -121,7 +123,7 @@ func appendLinkSection(lines *[]string, title string, items []types.Link, width 
 
 	for _, link := range display {
 		*lines = append(*lines, fmt.Sprintf("[%d] %s", link.Index, link.Label))
-		*lines = append(*lines, "    "+link.URL)
+		*lines = append(*lines, "    "+truncateURL(link.URL, max(width-4, 30)))
 		if strings.TrimSpace(link.Snippet) != "" {
 			for _, line := range wrapParagraph(link.Snippet, max(width-4, 30)) {
 				*lines = append(*lines, "    "+line)
@@ -139,4 +141,18 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func truncateURL(value string, width int) string {
+	if width <= 0 {
+		width = defaultWidth
+	}
+	maxLen := max(width-5, 32)
+	if len(value) <= maxLen {
+		return value
+	}
+	if maxLen <= 3 {
+		return value[:maxLen]
+	}
+	return value[:maxLen-3] + "..."
 }

@@ -22,7 +22,7 @@ func TestRenderIncludesLinksAndContent(t *testing.T) {
 		},
 	}, Options{Width: 40, ShowHelpHint: true})
 
-	for _, want := range []string{"Title: Example", "This is readable text", "Articles", "[1] One Article Headline", "Navigation", "Commands: open <n>"} {
+	for _, want := range []string{"Example", "This is readable text", "Articles", "[1] One Article Headline", "Navigation", "Commands: open <n>"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("render output missing %q: %q", want, out)
 		}
@@ -43,5 +43,22 @@ func TestRenderUsesReadabilityContent(t *testing.T) {
 	}
 	if strings.Contains(out, "plain") {
 		t.Fatalf("did not expect standard content, got %q", out)
+	}
+}
+
+func TestRenderSuppressesEmptyLinkSections(t *testing.T) {
+	t.Parallel()
+
+	out := Render(&types.Page{
+		Title:       "Empty",
+		FinalURL:    "https://example.com/really/long/url/that/should/be/truncated/for/terminal/output/because/it/is/far/too/long",
+		TextContent: "Body text.",
+	}, Options{Width: 50})
+
+	if strings.Contains(out, "Navigation\n") || strings.Contains(out, "Articles\n") {
+		t.Fatalf("did not expect empty link sections in %q", out)
+	}
+	if !strings.Contains(out, "...") {
+		t.Fatalf("expected truncated URL in %q", out)
 	}
 }
