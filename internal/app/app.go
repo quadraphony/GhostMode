@@ -9,50 +9,51 @@ import (
 	"net/url"
 	"strings"
 
+	"ghost-browser/internal/bookmarks"
+	"ghost-browser/internal/browser"
 	apperrors "ghost-browser/internal/errors"
 	"ghost-browser/internal/fetcher"
+	"ghost-browser/internal/history"
 	"ghost-browser/internal/parser"
-	"ghost-browser/internal/resolver"
 )
 
-func Run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: ghost <url>")
-		return 1
-	}
-
-	normalizedURL, err := resolver.NormalizeURL(args[0])
+func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	configDir, err := bookmarks.DefaultDir()
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", formatError(err))
 		return 1
 	}
 
-	result, err := fetcher.New(fetcher.DefaultTimeout, fetcher.DefaultUserAgent).Fetch(context.Background(), normalizedURL)
+	historyStore := history.NewStore(configDir)
+	historyEntries, err := historyStore.Load()
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %s\n", formatError(err))
-		return 1
+		fmt.Fprintf(stderr, "warning: %s\n", formatError(err))
 	}
 
-	page, err := parser.New().Parse(normalizedURL, result)
-	if err != nil {
-		fmt.Fprintf(stderr, "error: %s\n", formatError(err))
-		return 1
+	appBrowser := browser.New(
+		fetcher.New(fetcher.DefaultTimeout, fetcher.DefaultUserAgent),
+		parser.New(),
+		bookmarks.NewStore(configDir),
+		historyStore,
+		browser.NewDuckDuckGoSearch(""),
+		historyEntries,
+	)
+
+	ctx := context.Background()
+	if len(args) > 0 {
+		if _, err := appBrowser.LoadURL(ctx, args[0]); err != nil {
+			fmt.Fprintf(stderr, "error: %s\n", formatError(err))
+			return 1
+		}
+		fmt.Fprint(stdout, appBrowser.RenderCurrent())
+	} else {
+		fmt.Fprintln(stdout, "Ghost Mode Browser")
+		fmt.Fprintln(stdout, "Type `help` for commands or paste a URL to begin.")
 	}
 
-	fmt.Fprintln(stdout, "Ghost Mode Browser")
-	if page.Title != "" {
-		fmt.Fprintf(stdout, "Title: %s\n", page.Title)
-	}
-	fmt.Fprintf(stdout, "Source URL: %s\n", page.SourceURL)
-	fmt.Fprintf(stdout, "Final URL: %s\n", page.FinalURL)
-	fmt.Fprintf(stdout, "Status: %d\n", result.StatusCode)
-	fmt.Fprintf(stdout, "Content-Type: %s\n\n", result.ContentType)
-	if page.TextContent != "" {
-		fmt.Fprintln(stdout, page.TextContent)
-		fmt.Fprintln(stdout)
-	}
-	for _, warning := range page.Warnings {
-		fmt.Fprintf(stdout, "Warning: %s\n", warning)
+	if err := appBrowser.RunInteractive(ctx, stdin, stdout, stderr); err != nil {
+		fmt.Fprintf(stderr, "error: %s\n", formatError(err))
+		return 1
 	}
 
 	return 0

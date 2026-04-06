@@ -7,6 +7,8 @@ import (
 
 	"ghost-browser/internal/cleaner"
 	apperrors "ghost-browser/internal/errors"
+	"ghost-browser/internal/readability"
+	"ghost-browser/internal/resolver"
 	"ghost-browser/pkg/types"
 	"golang.org/x/net/html"
 )
@@ -28,10 +30,12 @@ func (p *Parser) Parse(sourceURL string, fetchResult *types.FetchResult) (*types
 	}
 
 	page := &types.Page{
-		SourceURL:   sourceURL,
-		FinalURL:    fetchResult.FinalURL,
-		Title:       extractTitle(fetchResult.Body, doc),
-		TextContent: extractText(doc),
+		SourceURL:          sourceURL,
+		FinalURL:           fetchResult.FinalURL,
+		Title:              extractTitle(fetchResult.Body, doc),
+		TextContent:        extractText(doc),
+		ReadabilityContent: readability.Extract(doc),
+		Links:              resolver.ExtractLinks(doc, fetchResult.FinalURL),
 		Metadata: map[string]string{
 			"content_type": fetchResult.ContentType,
 		},
