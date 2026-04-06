@@ -17,7 +17,7 @@
 
 ### Blocked
 
-- Git commit/push confirmation is blocked because the workspace is not initialized as a Git repository
+- None
 
 ## Future Phases
 

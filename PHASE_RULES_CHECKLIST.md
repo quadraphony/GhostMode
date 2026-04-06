@@ -10,12 +10,13 @@
 - [x] Update `PROJECT_RULES.md`
 - [x] Update `TASK_LIST.md`
 - [x] Confirm stable phase exit criteria
-- [ ] Commit cleanly
-- [ ] Push changes
+- [x] Commit cleanly
+- [x] Push changes
 
 ## Notes
 
 - Tests run:
   - `env HOME=/tmp GOCACHE=/tmp/go-cache GOPATH=/tmp/go /snap/go/current/bin/go test ./...`
   - `env HOME=/tmp GOCACHE=/tmp/go-cache GOPATH=/tmp/go /snap/go/current/bin/go build ./cmd/ghost`
-- Commit and push are currently blocked because `/home/leeroy/ghostmode` is not a Git repository.
+- Phase 1 commit: `c3e007f` (`Phase 1: add CLI fetch foundation`)
+- Phase 1 pushed to `origin/main`
