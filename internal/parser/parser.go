@@ -29,12 +29,15 @@ func (p *Parser) Parse(sourceURL string, fetchResult *types.FetchResult) (*types
 		return nil, fmt.Errorf("%w: %v", apperrors.ErrInvalidHTML, err)
 	}
 
+	standardContent := extractPrimaryText(doc)
+	readabilityResult := readability.Analyze(doc)
+
 	page := &types.Page{
 		SourceURL:          sourceURL,
 		FinalURL:           fetchResult.FinalURL,
 		Title:              extractTitle(fetchResult.Body, doc),
-		TextContent:        extractText(doc),
-		ReadabilityContent: readability.Extract(doc),
+		TextContent:        standardContent,
+		ReadabilityContent: readabilityResult.Text,
 		Links:              resolver.ExtractLinks(doc, fetchResult.FinalURL),
 		Metadata: map[string]string{
 			"content_type": fetchResult.ContentType,
@@ -153,6 +156,45 @@ func extractText(root *html.Node) string {
 	flushParagraph()
 
 	return strings.Join(paragraphs, "\n\n")
+}
+
+func extractPrimaryText(root *html.Node) string {
+	body := findFirstElement(root, "body")
+	if body == nil {
+		body = root
+	}
+
+	result := readability.Analyze(body)
+	if result.Node != nil {
+		text := normalizeInlineWhitespaceForBlocks(result.Text)
+		if looksUsableContent(text, result.Score) {
+			return text
+		}
+	}
+
+	return extractText(body)
+}
+
+func looksUsableContent(text string, score int) bool {
+	if len(strings.TrimSpace(text)) < 80 {
+		return false
+	}
+	if score < 120 {
+		return false
+	}
+	return true
+}
+
+func normalizeInlineWhitespaceForBlocks(value string) string {
+	parts := strings.Split(value, "\n\n")
+	var cleaned []string
+	for _, part := range parts {
+		part = normalizeInlineWhitespace(part)
+		if part != "" {
+			cleaned = append(cleaned, part)
+		}
+	}
+	return strings.Join(cleaned, "\n\n")
 }
 
 func findFirstElement(node *html.Node, tag string) *html.Node {

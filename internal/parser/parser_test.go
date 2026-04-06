@@ -119,6 +119,56 @@ func TestParseFiltersJunkContainersByClassAndID(t *testing.T) {
 	}
 }
 
+func TestParsePrefersPrimaryContentSubtree(t *testing.T) {
+	t.Parallel()
+
+	body := readFixture(t, "noisy_layout.html")
+	page, err := New().Parse("https://example.com/source", &types.FetchResult{
+		ContentType: "text/html",
+		Body:        []byte(body),
+		FinalURL:    "https://example.com/noisy-layout",
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	for _, unwanted := range []string{"Subscribe now for premium access", "Privacy Terms Contact Careers", "Home News Business"} {
+		if strings.Contains(page.TextContent, unwanted) {
+			t.Fatalf("TextContent should not include %q: %q", unwanted, page.TextContent)
+		}
+	}
+	for _, wanted := range []string{
+		"GhostMode should extract the primary article instead of dragging the entire page into the terminal.",
+		"When the parser prefers the main story container first, the output becomes much easier to trust.",
+	} {
+		if !strings.Contains(page.TextContent, wanted) {
+			t.Fatalf("TextContent missing %q: %q", wanted, page.TextContent)
+		}
+	}
+}
+
+func TestParseFallsBackWhenNoStrongCandidateExists(t *testing.T) {
+	t.Parallel()
+
+	page, err := New().Parse("https://example.com/source", &types.FetchResult{
+		ContentType: "text/html",
+		Body: []byte(`
+			<html><body>
+				<section><p>Short note one.</p></section>
+				<section><p>Short note two.</p></section>
+			</body></html>
+		`),
+		FinalURL: "https://example.com/fallback",
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	if !strings.Contains(page.TextContent, "Short note one.") || !strings.Contains(page.TextContent, "Short note two.") {
+		t.Fatalf("expected fallback extraction to keep body content, got %q", page.TextContent)
+	}
+}
+
 func readFixture(t *testing.T, name string) string {
 	t.Helper()
 

@@ -7,15 +7,21 @@ import (
 	"golang.org/x/net/html"
 )
 
-func Extract(root *html.Node) string {
-	best := findBestCandidate(root)
-	if best == nil {
-		return ""
-	}
-	return extractText(best)
+type Result struct {
+	Node  *html.Node
+	Score int
+	Text  string
 }
 
-func findBestCandidate(root *html.Node) *html.Node {
+func Extract(root *html.Node) string {
+	result := Analyze(root)
+	if result.Node == nil {
+		return ""
+	}
+	return result.Text
+}
+
+func Analyze(root *html.Node) Result {
 	var best *html.Node
 	bestScore := 0
 
@@ -37,7 +43,14 @@ func findBestCandidate(root *html.Node) *html.Node {
 	}
 
 	walk(root)
-	return best
+	if best == nil {
+		return Result{}
+	}
+	return Result{
+		Node:  best,
+		Score: bestScore,
+		Text:  extractText(best),
+	}
 }
 
 func scoreNode(node *html.Node) int {
