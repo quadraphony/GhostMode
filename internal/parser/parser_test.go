@@ -86,6 +86,39 @@ func TestParseWarnsWhenNoReadableText(t *testing.T) {
 	}
 }
 
+func TestParseFiltersJunkContainersByClassAndID(t *testing.T) {
+	t.Parallel()
+
+	page, err := New().Parse("https://example.com/source", &types.FetchResult{
+		ContentType: "text/html",
+		Body: []byte(`
+			<html><body>
+				<div id="site-header">Top nav and sign in</div>
+				<div class="cookie-banner">We use cookies and share analytics</div>
+				<main>
+					<article class="story-body">
+						<p>Real article text stays visible.</p>
+					</article>
+				</main>
+				<aside class="related-links">related stories</aside>
+			</body></html>
+		`),
+		FinalURL: "https://example.com/noisy",
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	for _, unwanted := range []string{"Top nav and sign in", "We use cookies", "related stories"} {
+		if strings.Contains(page.TextContent, unwanted) {
+			t.Fatalf("TextContent should not include %q: %q", unwanted, page.TextContent)
+		}
+	}
+	if !strings.Contains(page.TextContent, "Real article text stays visible.") {
+		t.Fatalf("expected article content to remain, got %q", page.TextContent)
+	}
+}
+
 func readFixture(t *testing.T, name string) string {
 	t.Helper()
 

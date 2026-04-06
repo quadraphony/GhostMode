@@ -127,7 +127,7 @@ func extractText(root *html.Node) string {
 			current.WriteString(text)
 			return
 		case html.ElementNode:
-			if cleaner.ShouldDropElement(node.Data) || cleaner.IsHiddenElement(node) {
+			if cleaner.ShouldSuppressNode(node) {
 				return
 			}
 			if node.Data == "br" {

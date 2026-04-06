@@ -24,7 +24,7 @@ func findBestCandidate(root *html.Node) *html.Node {
 		if node == nil {
 			return
 		}
-		if node.Type == html.ElementNode && !cleaner.ShouldDropElement(node.Data) && !cleaner.IsHiddenElement(node) {
+		if node.Type == html.ElementNode && !cleaner.ShouldSuppressNode(node) {
 			score := scoreNode(node)
 			if score > bestScore {
 				bestScore = score
@@ -104,7 +104,7 @@ func extractText(root *html.Node) string {
 			current.WriteString(text)
 			return
 		case html.ElementNode:
-			if cleaner.ShouldDropElement(node.Data) || cleaner.IsHiddenElement(node) {
+			if cleaner.ShouldSuppressNode(node) {
 				return
 			}
 			if cleaner.IsBlockElement(node.Data) || strings.EqualFold(node.Data, "br") {
